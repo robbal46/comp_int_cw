@@ -1,28 +1,20 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.neural_network import MLPClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.metrics import confusion_matrix
 from scipy.io import savemat
 
 from spikedata import SpikeData
 
 
-class SpikeSorting:
+class SpikeSortingKNN:
 
     def __init__(self):
-        self.n = MLPClassifier(
-            hidden_layer_sizes=(300,),
-            random_state=1,
-            max_iter=1000,
-            activation='logistic',
-            solver='adam',
-            learning_rate_init=0.01,
-            verbose=False
-        )
-
-        
+        self.k = KNeighborsClassifier()
+    
         
 
-    def train_mlp(self):
+    def train_knn(self):
         # Create SpikeData object
         self.training_data = SpikeData()
         # Load in the training data set
@@ -38,16 +30,16 @@ class SpikeSorting:
         self.validation_data.filter_data(25e3)
 
         # Train the MLP with training dataset classes
-        self.n.fit(self.training_data.create_windows(), self.training_data.classes)
+        self.k.fit(self.training_data.create_windows(), self.training_data.class_to_vector())
 
 
 
-    def validate_mlp(self, tol=25):        
+    def validate_knn(self, tol=5):        
         known = self.validation_data.spikes
         detected = self.validation_data.detect_spikes()
 
-        correct = np.zeros(len(detected))
-        classes = np.zeros(len(detected))
+        correct = np.zeros(len(detected), dtype=int)
+        classes = np.zeros(len(detected), dtype=int)
 
         # Loop through detected spikes
         # Check if it matches an index within the known spikes (within tolerance)
@@ -66,21 +58,26 @@ class SpikeSorting:
                 diff = abs(known[found] - spike)
                 idx = found[np.argmin(diff)]
                 classes[i] = self.validation_data.classes[idx]
+                # Remove from selection
+                known[idx] = 0
 
         # Remove all undetected spikes from the array, and their corresponding classes
         correct = correct[correct != 0]
         classes = classes[classes != 0]
+        # Set class variables
+        self.validation_data.spikes = correct
+        self.validation_data.classes = classes
 
         # Score the spike detection method  
         n_total = len(known)
         n_correct = len(correct)
         spike_score = (n_correct / n_total) * 100
 
-
         # Classify detected spikes
-        predicted = self.n.predict(self.validation_data.create_windows())
+        predicted = self.k.predict(self.validation_data.create_windows())
+        predicted = np.argmax(predicted, axis=1) + 1
         # Compare to known classes
-        classified = np.where(predicted == classes)[0]
+        classified = np.where(predicted == self.validation_data.classes)[0]
 
         # Score classifier method
         n_classified = len(classified)
@@ -89,6 +86,9 @@ class SpikeSorting:
         print(f'From {n_total} spikes, {n_correct} were detected ({spike_score:.2f}%) successfully. ' 
             f'Of these, {n_classified} ({class_score:.2f}%) were classified correctly. '
             f'This gives a total success rate of {(spike_score*class_score)/100:.2f}%.')
+
+        cm = confusion_matrix(predicted, classes)
+        print(cm)
 
         return spike_score, class_score 
 
@@ -101,7 +101,7 @@ class SpikeSorting:
 
         self.submission_data.detect_spikes()
 
-        predicted = self.n.predict(self.submission_data.create_windows()) 
+        predicted = self.k.predict(self.submission_data.create_windows()) 
         self.submission_data.classes = predicted       
 
         unique, counts = np.unique(predicted, return_counts=True)
@@ -126,14 +126,13 @@ class SpikeSorting:
 
 if __name__ == '__main__':
 
-    s = SpikeSorting()
-    s.train_mlp()
-    s.validate_mlp()
+    s = SpikeSortingKNN()
+    s.train_knn()
+    s.validate_knn()
     #s.submission()
 
 
     
-
 
 
 

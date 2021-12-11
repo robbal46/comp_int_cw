@@ -1,4 +1,4 @@
-from scipy.signal import find_peaks, savgol_filter, butter, filtfilt
+from scipy.signal import find_peaks, savgol_filter, butter, filtfilt, sosfiltfilt
 from scipy.io import loadmat
 
 import numpy as np
@@ -24,9 +24,8 @@ class SpikeData:
             self.classes = data_set['Class']
 
 
-    def plot_data(self):
-        plt.plot(range(len(self.data)), self.data)
-        plt.vlines(self.spikes[0], min(self.data), max(self.data), colors='r')
+    def plot_data(self, x, xlen):
+        plt.plot(range(x, x+xlen), self.data[x:x+xlen])
         plt.show()
 
 
@@ -35,25 +34,9 @@ class SpikeData:
         self.spikes, self.classes = map(np.array, zip(*sorted(zip(self.spikes, self.classes))))   
 
 
-    def butter_band_pass_filter(self, data, f):
-        nyq = f / 2
-        lower = 30 / nyq
-        upper = 3000 / nyq
-
-        b,a = butter(4, [lower,upper], btype='band', output='ba')
-        filtered = filtfilt(b, a, data)
-        return filtered
-
     def filter_data(self, f):
-        # First apply band pass butterworth filter
-        nyq = f / 2
-        lower = 30 / nyq
-        upper = 3000 / nyq
-        b,a = butter(4, [lower,upper], btype='band', output='ba')
-        filtered = filtfilt(b, a, self.data)
-
-        filtered = self.butter_band_pass_filter(self.data, f)
-        filtered = savgol_filter(filtered, 65, 6)
+        sos = butter(1, 3000, btype='low', output='sos', fs=25e3)
+        filtered = sosfiltfilt(sos, self.data)
         self.data = filtered
     
 
@@ -75,11 +58,12 @@ class SpikeData:
         
     def detect_spikes(self):
         # detect peaks that exceed std deviation of data
-        std_dev = np.std(self.data)    
+        std_dev = 3 * np.std(self.data)   
+        #mad = 6 * np.median(np.abs(self.data)/0.6745) 
         peaks,_ = find_peaks(self.data, height=std_dev)    
 
         # find peaks returns the index of the peak amplitudes
-        spikes = np.zeros(len(peaks))
+        spikes = np.zeros(len(peaks), dtype=int)
 
         for i, index in enumerate(peaks):
             # Start of spike is where gradient is max
@@ -88,31 +72,41 @@ class SpikeData:
             # Number of indexes back from peak
             offset = 15 - np.argmax(grad)-1
             
-            spikes[i] = index - offset     
-
+            spikes[i] = index - offset 
 
         self.spikes = spikes
         return spikes
 
-
-
-
+    # Create array of data points around peak
     def create_windows(self, window_size=100):
-        before = int(window_size*0.25)
-        after = int(window_size*0.75)
+        # Start/end of window
+        before = 0
+        after = int(window_size - before)
 
         windows = np.zeros((len(self.spikes), window_size))
 
         for i, spike in enumerate(self.spikes):            
-            data = self.data[int(spike):int(spike+window_size)]
+            data = self.data[int(spike-before):int(spike+after)]
 
             min_val = np.min(data)
             max_val = np.max(data)
+            # Normalize data
             data_normal = (data - min_val) / (max_val - min_val)
 
             windows[i, :] = data_normal
 
         return windows
+
+    # Integer to one hot encoded vector for class labels
+    def class_to_vector(self):
+        
+        c = int(max(self.classes))
+        vec = self.classes - 1
+        vec = vec.reshape(-1)
+        one_hot = np.eye(c)[vec]
+
+        return one_hot
+    
 
 
         
