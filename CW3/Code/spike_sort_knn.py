@@ -1,138 +1,111 @@
 import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.metrics import confusion_matrix
 from scipy.io import savemat
+
+from sklearn.metrics import confusion_matrix, classification_report
+
+from sklearn.neighbors import KNeighborsClassifier
 
 from spikedata import SpikeData
 
 
 class SpikeSortingKNN:
 
-    def __init__(self):
-        self.k = KNeighborsClassifier()
-    
+    def __init__(self, k, p):
+  
+       self.n = KNeighborsClassifier(n_neighbors=k, p=p)
         
 
-    def train_knn(self):
-        # Create SpikeData object
+    def train_knn(self):       
+
+        # Create SpikeData object for training data
         self.training_data = SpikeData()
+
         # Load in the training data set
-        self.training_data.load_mat('training.mat', train=True)
-        # Sort Index/Class vectors into ascending order
+        self.training_data.load_mat('training.mat', train=True)  
+
+        # Sort index/class data 
         self.training_data.sort()
 
-        # Take last 10% of training data set and use as a validation data set
-        self.validation_data = self.training_data.split(0.1)
+        # Take last 20% of training data set and use as a validation data set
+        self.validation_data = self.training_data.split(0.2)
 
         # Filter the raw data
-        self.training_data.filter_data(25e3)
-        self.validation_data.filter_data(25e3)
+        self.training_data.filter_data(2500, 'low') 
+        self.validation_data.filter_data(2500, 'low')
 
-        # Train the MLP with training dataset classes
-        self.k.fit(self.training_data.create_windows(), self.training_data.class_to_vector())
+        # Run spike detection and comparison on training data
+        self.training_data.compare_spikes()
+
+        # Train the MLP with training dataset classes        
+        self.n.fit(self.training_data.create_windows(), self.training_data.class_one_hot())
 
 
 
-    def validate_knn(self, tol=5):        
-        known = self.validation_data.spikes
-        detected = self.validation_data.detect_spikes()
-
-        correct = np.zeros(len(detected), dtype=int)
-        classes = np.zeros(len(detected), dtype=int)
-
-        # Loop through detected spikes
-        # Check if it matches an index within the known spikes (within tolerance)
-        # If so, mark as a correct detection
-        for i, spike in enumerate(detected):
-            lower = spike - tol
-            upper = spike + tol
-
-            found = np.where((known > lower) & (known < upper))[0]
-
-            if len(found) > 0:
-                correct[i] = spike
-
-                # Sometimes a detected spike could correspond with multiple known spikes
-                # Select the closest one
-                diff = abs(known[found] - spike)
-                idx = found[np.argmin(diff)]
-                classes[i] = self.validation_data.classes[idx]
-                # Remove from selection
-                known[idx] = 0
-
-        # Remove all undetected spikes from the array, and their corresponding classes
-        correct = correct[correct != 0]
-        classes = classes[classes != 0]
-        # Set class variables
-        self.validation_data.spikes = correct
-        self.validation_data.classes = classes
-
-        # Score the spike detection method  
-        n_total = len(known)
-        n_correct = len(correct)
-        spike_score = (n_correct / n_total) * 100
+    def validate_knn(self):     
+        # Run spike detection and comparison on validation data
+        spike_score = self.validation_data.compare_spikes()  
 
         # Classify detected spikes
-        predicted = self.k.predict(self.validation_data.create_windows())
+        predicted = self.n.predict(self.validation_data.create_windows())
+        # Convert probabilties back to class labels (1-5)
         predicted = np.argmax(predicted, axis=1) + 1
+
         # Compare to known classes
         classified = np.where(predicted == self.validation_data.classes)[0]
 
         # Score classifier method
-        n_classified = len(classified)
-        class_score = (n_classified / n_correct) * 100
+        class_score = (len(classified) / len(self.validation_data.spikes)) * 100
 
-        print(f'From {n_total} spikes, {n_correct} were detected ({spike_score:.2f}%) successfully. ' 
-            f'Of these, {n_classified} ({class_score:.2f}%) were classified correctly. '
-            f'This gives a total success rate of {(spike_score*class_score)/100:.2f}%.')
+        # Performance metrics
+        print(f'Spike detection score: {spike_score:.1f}')
+        print(f'Class detection score: {class_score:.1f}')
+        print(f'Overall score:{(spike_score*class_score)/100:.1f}')
 
-        cm = confusion_matrix(predicted, classes)
+        print('Real Class Breakdown:')
+        self.class_breakdown(self.validation_data.classes)
+        print('Predicted Class Breakdown')
+        self.class_breakdown(predicted)
+
+        cm = confusion_matrix(self.validation_data.classes, predicted)
         print(cm)
+        cr = classification_report(self.validation_data.classes, predicted)
+        print(cr)
 
-        return spike_score, class_score 
+        return 
+
+
 
 
     def submission(self):
         self.submission_data = SpikeData()
-        self.submission_data.load_mat('submission.mat', train=False)
+        self.submission_data.load_mat('submission.mat')
 
-        self.submission_data.filter_data(25e3)
+        self.submission_data.filter_data([25,1900], 'band')
+        #self.submission_data.plot_data(0, len(self.submission_data.data))
 
         self.submission_data.detect_spikes()
 
-        predicted = self.k.predict(self.submission_data.create_windows()) 
-        self.submission_data.classes = predicted       
+        predicted = self.n.predict(self.submission_data.create_windows())      
+        predicted = np.argmax(predicted, axis=1) + 1 
 
-        unique, counts = np.unique(predicted, return_counts=True)
-        breakdown = dict(zip(unique, counts))
+        print('Class Breakdown')
+        self.class_breakdown(predicted)
 
-        print(f'Detected {len(self.submission_data.spikes)} spikes. '
-            f'Class breakdown is - Type 1: {breakdown[1]}, Type 2: {breakdown[2]}, '
-            f'Type 3: {breakdown[3]}, Type 4: {breakdown[4]}'
-        )
-
-
-        mat_file = {'Index': self.submission_data.spikes, 'Class':self.submission_data.classes}
+        mat_file = {'Index': self.submission_data.spikes, 'Class':predicted}
         savemat('13772.mat', mat_file)
 
-        
 
+    def class_breakdown(self, classes):
+        unique, counts = np.unique(classes, return_counts=True)
+        breakdown = dict(zip(unique, counts))
 
-
-
-
+        for key, val in breakdown.items():
+            print(f'Type {key}: {val}')
 
 
 if __name__ == '__main__':
 
-    s = SpikeSortingKNN()
+    s = SpikeSortingKNN(5,2)
     s.train_knn()
     s.validate_knn()
     #s.submission()
-
-
-    
-
-
-

@@ -1,4 +1,6 @@
 import numpy as np
+import matplotlib.pyplot as plt
+from scipy.signal import periodogram
 
 from spikedata import SpikeData
 
@@ -11,12 +13,15 @@ training_data.load_mat('training.mat', train=True)
 training_data.sort()
 
 
-for i in range(1,6):
-    cls = np.where(training_data.classes == i)[0][0]
-    idx = training_data.spikes[cls]
+# for i in range(1,6):
+#     cls = np.where(training_data.classes == i)[0][0]
+#     idx = training_data.spikes[cls]
 
-    training_data.plot_data(idx, 50)
+#     training_data.plot_data(idx, 50)
 
 
-training_data.filter_data(25e3)
-training_data.
+training_data.filter_data()
+
+f, pxx_den = periodogram(training_data.data, 25e3)
+plt.semilogy(f, pxx_den)
+plt.show()
