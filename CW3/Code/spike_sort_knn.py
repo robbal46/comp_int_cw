@@ -10,9 +10,11 @@ from spikedata import SpikeData
 
 class SpikeSortingKNN:
 
-    def __init__(self, k, p):
+    def __init__(self, k=5, p=2, verbose=True):        
   
        self.n = KNeighborsClassifier(n_neighbors=k, p=p)
+
+       self.verbose = verbose
         
 
     def train_knn(self):       
@@ -37,7 +39,7 @@ class SpikeSortingKNN:
         self.training_data.compare_spikes()
 
         # Train the MLP with training dataset classes        
-        self.n.fit(self.training_data.create_windows(), self.training_data.class_one_hot())
+        self.n.fit(self.training_data.create_windows(), self.training_data.classes)
 
 
 
@@ -48,45 +50,43 @@ class SpikeSortingKNN:
         # Classify detected spikes
         predicted = self.n.predict(self.validation_data.create_windows())
         # Convert probabilties back to class labels (1-5)
-        predicted = np.argmax(predicted, axis=1) + 1
 
         # Compare to known classes
         classified = np.where(predicted == self.validation_data.classes)[0]
 
         # Score classifier method
-        class_score = (len(classified) / len(self.validation_data.spikes)) * 100
+        class_score = (len(classified) / len(self.validation_data.spikes))
 
-        # Performance metrics
-        print(f'Spike detection score: {spike_score:.1f}')
-        print(f'Class detection score: {class_score:.1f}')
-        print(f'Overall score:{(spike_score*class_score)/100:.1f}')
+        #Performance metrics
+        if self.verbose:
+            print(f'Spike detection score: {spike_score:.4f}')
+            print(f'Class detection score: {class_score:.4f}')
+            print(f'Overall score:{(spike_score*class_score):.4f}')
 
-        print('Real Class Breakdown:')
-        self.class_breakdown(self.validation_data.classes)
-        print('Predicted Class Breakdown')
-        self.class_breakdown(predicted)
+            print('Real Class Breakdown:')
+            self.class_breakdown(self.validation_data.classes)
+            print('Predicted Class Breakdown')
+            self.class_breakdown(predicted)
 
-        cm = confusion_matrix(self.validation_data.classes, predicted)
-        print(cm)
-        cr = classification_report(self.validation_data.classes, predicted)
-        print(cr)
+            cm = confusion_matrix(self.validation_data.classes, predicted)
+            print(cm)
+            cr = classification_report(self.validation_data.classes, predicted)
+            print(cr)
 
-        return 
-
-
+        return class_score
 
 
+    # Run classifier on submission data set and create submission file
     def submission(self):
         self.submission_data = SpikeData()
         self.submission_data.load_mat('submission.mat')
 
+        # Filter data with band pass as data is very noisy
         self.submission_data.filter_data([25,1900], 'band')
-        #self.submission_data.plot_data(0, len(self.submission_data.data))
 
         self.submission_data.detect_spikes()
 
         predicted = self.n.predict(self.submission_data.create_windows())      
-        predicted = np.argmax(predicted, axis=1) + 1 
 
         print('Class Breakdown')
         self.class_breakdown(predicted)
@@ -105,7 +105,7 @@ class SpikeSortingKNN:
 
 if __name__ == '__main__':
 
-    s = SpikeSortingKNN(5,2)
+    s = SpikeSortingKNN(1,2)
     s.train_knn()
     s.validate_knn()
     #s.submission()

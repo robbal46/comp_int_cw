@@ -3,14 +3,29 @@ import matplotlib.pyplot as plt
 from scipy.signal import periodogram
 
 from spikedata import SpikeData
+from spike_sort_knn import SpikeSortingKNN
 
 
-# Create SpikeData object
-training_data = SpikeData()
-# Load in the training data set
-training_data.load_mat('training.mat', train=True)
-# Sort Index/Class vectors into ascending order
-training_data.sort()
+def plots():
+    training_data = SpikeData()
+    training_data.load_mat('training.mat', train=True)
+    training_data.sort()
+    training_data.plot_data(0,1440000)
+
+    training_data = SpikeData()
+    training_data.load_mat('submission.mat')
+    training_data.sort()
+    training_data.plot_data(0,1440000)
+
+
+def dist():
+    training_data = SpikeData()
+    training_data.load_mat('training.mat', train=True)
+    training_data.sort()
+    s = SpikeSortingKNN()
+    s.class_breakdown(training_data.classes)
+
+
 
 
 # for i in range(1,6):
@@ -19,9 +34,18 @@ training_data.sort()
 
 #     training_data.plot_data(idx, 50)
 
+def freq():
+    for f in range(1000, 4500, 500):
+        data = SpikeData()
+        data.load_mat('training.mat', train=True)
+        data.sort()
 
-training_data.filter_data()
+        data.filter_data(f, 'low')
+        actual_spikes = data.spikes
+        acc = data.compare_spikes()
 
-f, pxx_den = periodogram(training_data.data, 25e3)
-plt.semilogy(f, pxx_den)
-plt.show()
+        print(f'{f}hz: {acc*100} accuracy')
+    
+
+
+dist()

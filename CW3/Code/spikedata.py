@@ -23,7 +23,7 @@ class SpikeData:
             self.spikes = data_set['Index']
             self.classes = data_set['Class']
 
-
+    # Plots data
     def plot_data(self, x, xlen):
         plt.plot(range(x, x+xlen), self.data[x:x+xlen])
         plt.show()
@@ -33,19 +33,13 @@ class SpikeData:
         self.spikes, self.classes = map(np.array, zip(*sorted(zip(self.spikes, self.classes))))   
 
     # Apply filter to recording data
-    def filter_data(self, cutoff, type, f=25e3, order=2):
+    def filter_data(self, cutoff, type, fs=25e3, order=2):
         # Low pass butterworth filter
-        sos = butter(order, cutoff, btype=type, output='sos', fs=f)
+        sos = butter(order, cutoff, btype=type, output='sos', fs=fs)
         filtered = sosfiltfilt(sos, self.data)
-        self.data = filtered
-
-    def normalise(self):
-        # Normalize data (0-1)
-        min_val = np.min(self.data)
-        max_val = np.max(self.data)            
-        self.data = (self.data - min_val) / (max_val - min_val)        
+        self.data = filtered   
     
-    # Spilt one spike data set into 2
+    # Spilt one spike data set into 2 (training/validation)
     def split(self, percent):
         # Get index to split at
         idx = int(len(self.data)*(1.0-percent))
@@ -71,16 +65,12 @@ class SpikeData:
         # Detect peaks 
         peaks, _ = find_peaks(self.data, height=mad) 
 
-        # plt.plot(range(len(self.data)), self.data)
-        # for p in peaks:
-        #     plt.plot(p, self.data[p], 'x')
-
         # Overwrite class variable
         self.spikes = peaks
         return peaks
 
     # If training data, compare spike detection method to known index/class vectors
-    def compare_spikes(self, tol=50):
+    def compare_spikes(self, tol=25):
         # Get known spike indexes   
         known = self.spikes
 
@@ -95,7 +85,7 @@ class SpikeData:
         for i, spike in enumerate(detected):
 
             # Get all matching indexes in a tolerance
-            found = np.where((known > spike-tol) & (known < spike+tol))[0]
+            found = np.where((known > spike-tol-15) & (known < spike+tol))[0]
 
             if len(found) > 0:
                 # Mark as correct detection
@@ -106,7 +96,8 @@ class SpikeData:
                 diff = abs(known[found] - spike)
                 idx = found[np.argmin(diff)]
 
-                classes[i] = self.classes[idx]
+                if idx < len(self.classes):
+                    classes[i] = self.classes[idx]
 
                 # Remove from selection, prevent duplicates
                 known[idx] = 0
@@ -120,7 +111,7 @@ class SpikeData:
         self.classes = classes
 
         # Score spike detecttion
-        spike_score = (len(spikes) / len(known)) * 100
+        spike_score = (len(spikes) / len(known))
         return spike_score
 
 
@@ -134,23 +125,9 @@ class SpikeData:
             # Slice data array to get window     
             data = self.data[int(spike-offset):int(spike+window_size-offset)]
 
-            # Normalize data (0-1)
-            # min_val = np.min(data)
-            # max_val = np.max(data)            
-            # data_normal = (data - min_val) / (max_val - min_val)
-
             windows[i, :] = data
         return windows
 
-    # Encode integer class labels as one hot vectors
-    def class_one_hot(self):
-        # Number of classes
-        c = int(max(self.classes))
-        # Subtract 1 to start from 0 (1-5 -> 0-4)           
-        vec = (self.classes - 1).astype(int)
-        # Use rows from identity matrix to get one hot vectors
-        one_hot = np.eye(c)[np.reshape(vec, -1)]
-        return one_hot
     
 
 
