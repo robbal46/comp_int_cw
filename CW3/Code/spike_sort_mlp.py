@@ -1,7 +1,8 @@
 import numpy as np
 from scipy.io import savemat
+import matplotlib.pyplot as plt
 
-from sklearn.metrics import confusion_matrix, classification_report, accuracy_score
+from sklearn.metrics import confusion_matrix, classification_report
 
 from sklearn.neural_network import MLPClassifier
 
@@ -16,7 +17,7 @@ class SpikeSortingMLP:
             hidden_layer_sizes=(20,),
             random_state=1,
             max_iter=1000,
-            activation='logistic',
+            activation='relu',
             solver='adam',
             learning_rate_init=0.01,
             batch_size=16,
@@ -57,7 +58,8 @@ class SpikeSortingMLP:
         predicted = self.n.predict(self.validation_data.create_windows())
 
         # Compare to known classes
-        classified = np.where(predicted == self.validation_data.classes)[0]
+        classified = np.where(predicted == self.validation_data.classes)[0]     
+        
 
         # Score classifier method
         class_score = (len(classified) / len(self.validation_data.spikes))
@@ -67,15 +69,28 @@ class SpikeSortingMLP:
         print(f'Class detection score: {class_score:.4f}')
         print(f'Overall score:{(spike_score*class_score):.4f}')
 
-        print('Real Class Breakdown:')
-        self.class_breakdown(self.validation_data.classes)
-        print('Predicted Class Breakdown')
-        self.class_breakdown(predicted)
-
         cm = confusion_matrix(self.validation_data.classes, predicted)
         print(cm)
         cr = classification_report(self.validation_data.classes, predicted, digits=4)
         print(cr)
+
+        # # Plot any misclassified spikes
+        # incorrect = np.where(predicted != self.validation_data.classes)[0]         
+        # bd = list(self.class_breakdown(self.validation_data.classes[incorrect]))
+        # fig, axs = plt.subplots(1,len(bd))
+        # axs = np.array(axs).reshape(-1)
+        # colours = ['c', 'r', 'g', 'b', 'm']
+        # for i in incorrect:
+        #     idx = int(self.validation_data.spikes[i])            
+        #     c = int(self.validation_data.classes[i])            
+        #     axs[bd.index(c)].plot(self.validation_data.data[idx-15:idx+26], colours[c-1])      
+        # for j, ax in enumerate(axs):
+        #     ax.set_title(f'Class {bd[j]:g}')
+        # plt.tight_layout()
+        # plt.subplots_adjust(wspace=0.1)
+        # plt.show()
+
+        return class_score
 
 
 
@@ -108,7 +123,8 @@ class SpikeSortingMLP:
         breakdown = dict(zip(unique, counts))
 
         for key, val in breakdown.items():
-            print(f'Type {key}: {val}')
+            print(f'Type {key:g}: {val}')
+        return breakdown
 
 
 

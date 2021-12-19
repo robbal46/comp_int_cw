@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.io import savemat
+import matplotlib.pyplot as plt
 
 from sklearn.metrics import confusion_matrix, classification_report
 
@@ -63,15 +64,26 @@ class SpikeSortingKNN:
             print(f'Class detection score: {class_score:.4f}')
             print(f'Overall score:{(spike_score*class_score):.4f}')
 
-            print('Real Class Breakdown:')
-            self.class_breakdown(self.validation_data.classes)
-            print('Predicted Class Breakdown')
-            self.class_breakdown(predicted)
-
             cm = confusion_matrix(self.validation_data.classes, predicted)
             print(cm)
-            cr = classification_report(self.validation_data.classes, predicted)
+            cr = classification_report(self.validation_data.classes, predicted, digits=4)
             print(cr)
+
+            # # Plot any misclassified spikes
+            # incorrect = np.where(predicted != self.validation_data.classes)[0]         
+            # bd = list(self.class_breakdown(self.validation_data.classes[incorrect]))
+            # fig, axs = plt.subplots(1,len(bd))
+            # axs = np.array(axs).reshape(-1)
+            # colours = ['c', 'r', 'g', 'b', 'm']
+            # for i in incorrect:
+            #     idx = int(self.validation_data.spikes[i])            
+            #     c = int(self.validation_data.classes[i])            
+            #     axs[bd.index(c)].plot(self.validation_data.data[idx-15:idx+26], colours[c-1])      
+            # for j, ax in enumerate(axs):
+            #     ax.set_title(f'Class {bd[j]:g}')
+            # plt.tight_layout()
+            # plt.subplots_adjust(wspace=0.1)
+            # plt.show()
 
         return class_score
 
@@ -82,11 +94,13 @@ class SpikeSortingKNN:
         self.submission_data.load_mat('submission.mat')
 
         # Filter data with band pass as data is very noisy
-        self.submission_data.filter_data([25,1900], 'band')
+        self.submission_data.filter_data([25,1800], 'band')
 
-        self.submission_data.detect_spikes()
+        spikes = self.submission_data.detect_spikes()
+        print(f'{len(spikes)} spikes detected')
 
-        predicted = self.n.predict(self.submission_data.create_windows())      
+        predicted = self.n.predict(self.submission_data.create_windows())
+        self.submission_data.classes = predicted      
 
         print('Class Breakdown')
         self.class_breakdown(predicted)
@@ -100,12 +114,13 @@ class SpikeSortingKNN:
         breakdown = dict(zip(unique, counts))
 
         for key, val in breakdown.items():
-            print(f'Type {key}: {val}')
+            print(f'Type {key:g}: {val}')
+        return breakdown
 
 
 if __name__ == '__main__':
 
-    s = SpikeSortingKNN(1,2)
+    s = SpikeSortingKNN(1,2, verbose=True)
     s.train_knn()
     s.validate_knn()
-    #s.submission()
+    s.submission()

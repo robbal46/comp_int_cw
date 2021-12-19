@@ -70,7 +70,7 @@ class SpikeData:
         return peaks
 
     # If training data, compare spike detection method to known index/class vectors
-    def compare_spikes(self, tol=25):
+    def compare_spikes(self, tol=50):
         # Get known spike indexes   
         known = self.spikes
 
@@ -85,7 +85,7 @@ class SpikeData:
         for i, spike in enumerate(detected):
 
             # Get all matching indexes in a tolerance
-            found = np.where((known > spike-tol-15) & (known < spike+tol))[0]
+            found = np.where((known > spike-tol) & (known < spike+tol))[0]
 
             if len(found) > 0:
                 # Mark as correct detection
@@ -116,7 +116,7 @@ class SpikeData:
 
 
     # Create window of data points around peak location
-    def create_windows(self, window_size=41, offset=15):
+    def create_windows(self, window_size=46, offset=15):
         windows = np.zeros((len(self.spikes), window_size))
 
         # Loop through each spike index

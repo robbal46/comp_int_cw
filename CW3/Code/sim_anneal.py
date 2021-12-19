@@ -1,8 +1,6 @@
 import numpy as np
 from random import random, randint
 
-from sklearn.decomposition import PCA
-
 from spike_sort_knn import SpikeSortingKNN
 
 # Optimizes the K-Nearest Neighbours classifier parameters using simulated annealing
